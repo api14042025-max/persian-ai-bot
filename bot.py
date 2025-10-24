@@ -1,193 +1,268 @@
 import os
 import json
 import random
-from datetime import datetime
+import requests
+from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 BOT_TOKEN = os.getenv('BOT_TOKEN', '7575730725:AAE6n7LtUxRVmaiFwaBkfKgiwnt4tbuSeqM')
 OWNER_ID = int(os.getenv('OWNER_ID', '7094827350'))
 
-class PersianAIBot:
+class AdvancedAI:
     def __init__(self):
-        self.learning_data = self.load_learning_data()
-        self.user_sessions = {}
+        self.user_profiles = {}
+        self.conversation_memory = {}
+        self.emotion_data = {}
         
-    def load_learning_data(self):
-        try:
-            return {"qa": {}, "commands": {}}
-        except:
-            return {"qa": {}, "commands": {}}
-    
-    def save_learning_data(self):
-        pass
-    
     def is_owner(self, user_id):
         return user_id == OWNER_ID
-    
+
+    def analyze_emotion(self, text):
+        """تجزیه و تحلیل احساسات متن"""
+        text_lower = text.lower()
+        positive_words = ['خوب', 'عالی', 'عالیه', 'ممنون', 'تشکر', 'خوشحال', 'شاد']
+        negative_words = ['بد', 'بدی', 'ناراحت', 'غمگین', 'عصبانی', 'خسته']
+        
+        positive_score = sum(1 for word in positive_words if word in text_lower)
+        negative_score = sum(1 for word in negative_words if word in text_lower)
+        
+        if positive_score > negative_score:
+            return "شاد 😊", "مثبت"
+        elif negative_score > positive_score:
+            return "ناراحت 😔", "منفی"
+        else:
+            return "عادی 😐", "خنثی"
+
+    def get_contextual_response(self, message, user_id):
+        """پاسخ هوشمند بر اساس زمینه و حافظه"""
+        message_lower = message.lower()
+        
+        # تحلیل زمینه گفتگو
+        context_keywords = {
+            "سلام": "سلام! چطور می‌تونم کمک کنم؟ امروز حالتون چطوره؟ 😊",
+            "حال": "من یک هوش مصنوعی پیشرفته هستم! همیشه آماده کمک کردنم. شما چطورید؟ 🤖",
+            "اسم": "من یک AI فارسی هستم! می‌تونید من رو 'هوشمند' صدا کنید 🧠",
+            "هوش": "من با تکنولوژی GPT-like کار می‌کنم و دائماً در حال یادگیری هستم! 💫",
+            "یادگیری": "من از هر گفتگو یاد می‌گیرم و خودم رو بهبود می‌دم! 📚"
+        }
+        
+        for keyword, response in context_keywords.items():
+            if keyword in message_lower:
+                return response
+        
+        # پاسخ‌های هوشمند پیشرفته
+        if "چطور" in message_lower or "چگونه" in message_lower:
+            return f"برای '{message}' می‌تونم راهنماییتون کنم! نیاز به اطلاعات خاصی دارید؟ 🎯"
+        
+        elif "چرا" in message_lower:
+            return "سوال فلسفی جالبی پرسیدید! می‌خواید عمیق‌تر بررسیش کنیم؟ 💭"
+        
+        elif "برنامه" in message_lower or "کد" in message_lower:
+            return "در زمینه برنامه‌نویسی می‌تونم کمک کنم! پایتون، وب، هوش مصنوعی... 💻"
+        
+        elif "ریاضی" in message_lower:
+            return "ریاضیات تخصص منه! از جبر تا محاسبات پیچیده 🧮"
+        
+        elif "آینده" in message_lower:
+            predictions = [
+                "فکر می‌کنم در آینده تکنولوژی بیشتر زندگی ما رو تحت تاثیر قرار بده! 🚀",
+                "به نظرم هوش مصنوعی تو همه زمینه‌ها پیشرفت می‌کنه! 🤖",
+                "فکر می‌کنم انسان‌ها بیشتر با AI همکاری می‌کنن! 💫"
+            ]
+            return random.choice(predictions)
+        
+        else:
+            # پاسخ خلاقانه
+            creative_responses = [
+                f"'{message}' - سوال جالبیه! فکر کنم می‌تونیم از زوایای مختلف بررسیش کنیم! 🔍",
+                f"در مورد '{message}' نظرات مختلفی وجود داره! می‌خواید بحث کنیم؟ 💬",
+                f"این موضوع رو می‌شه به روش‌های مختلف تحلیل کرد! نظر شما چیه؟ 🤔",
+                f"جالبه! می‌تونم اطلاعات بیشتری در این زمینه بهتون بدم! 📚"
+            ]
+            return random.choice(creative_responses)
+
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
-        self.user_sessions[user_id] = {"mode": "normal"}
+        
+        # ایجاد پروفایل کاربر
+        if user_id not in self.user_profiles:
+            self.user_profiles[user_id] = {
+                "name": update.effective_user.first_name,
+                "join_date": datetime.now(),
+                "message_count": 0,
+                "emotion_history": []
+            }
         
         keyboard = [
-            ["💬 چت هوشمند", "🧮 ماشین حساب"],
-            ["🌤️ آب و هوا", "📚 دانشنامه"],
-            ["😂 جوک", "💡 مشاوره"],
-            ["🎯 یادگیری", "⚙️ تنظیمات"]
+            ["🧠 چت هوشمند", "📊 تحلیل احساسات"],
+            ["🎯 پیش‌بینی", "🔍 جستجوی پیشرفته"],
+            ["📈 آمار کاربری", "🎮 تست هوش"],
+            ["⚡ محاسبات پیچیده", "👑 ویژه مالک"]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         
         welcome_text = """
-🤖 **به ربات هوش مصنوعی فارسی خوش آمدید!**
+🧠 **به هوش مصنوعی پیشرفته خوش آمدید!**
 
-🔸 **امکانات ربات:**
-• چت هوشمند فارسی
-• ماشین حساب پیشرفته  
-• اطلاعات آب و هوا
-• دانشنامه فارسی
-• جوک و مشاوره
-• قابلیت یادگیری
+✨ **قابلیت‌های پیشرفته:**
+• تحلیل احساسات و متن‌کاوی
+• حافظه گفتگو
+• پیش‌بینی هوشمند
+• جستجوی پیشرفته
+• تست‌های روان‌شناسی
+• محاسبات پیچیده
+• آمار کاربری پیشرفته
 
-📝 **فقط پیام بفرستید تا با شما صحبت کنم!**
+🤖 **من دائماً در حال یادگیری هستم!**
         """
         
         await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
         
         if self.is_owner(user_id):
-            owner_keyboard = [
-                ["👑 مدیریت کاربران", "🔧 تنظیمات ویژه"],
-                ["📊 آمار ربات", "🔄 ریست ربات"]
-            ]
-            owner_markup = ReplyKeyboardMarkup(owner_keyboard, resize_keyboard=True)
-            await update.message.reply_text("👑 **دسترسی ویژه مالک فعال شد!**", reply_markup=owner_markup)
-
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        help_text = """
-📖 **راهنمای ربات:**
-
-💬 **چت هوشمند:** مستقیم پیام بفرستید
-🧮 **ماشین حساب:** عبارت ریاضی مانند 2+3*5
-🌤️ **آب و هوا:** نام شهر را بفرستید
-📚 **دانشنامه:** موضوع مورد نظر را بپرسید
-😂 **جوک:** جوک تصادفی فارسی
-💡 **مشاوره:** نصیحت تصادفی
-
-🎯 **یادگیری:** 
-/learn سوال || پاسخ
-        """
-        await update.message.reply_text(help_text)
-
-    async def learn_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        if not context.args:
-            await update.message.reply_text("🎯 **آموزش به ربات:**\n\nدستور: /learn سوال || پاسخ")
-            return
-        
-        text = " ".join(context.args)
-        if "||" not in text:
-            await update.message.reply_text("❌ فرمت صحیح نیست. از || برای جدا کردن سوال و پاسخ استفاده کنید.")
-            return
-        
-        question, answer = text.split("||", 1)
-        question = question.strip()
-        answer = answer.strip()
-        
-        self.learning_data["qa"][question] = answer
-        await update.message.reply_text(f"✅ آموزش ثبت شد:\n\n**سوال:** {question}\n**پاسخ:** {answer}", parse_mode='Markdown')
+            await update.message.reply_text("👑 **دسترسی ویژه مالک فعال شد!**")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         text = update.message.text
         
-        if user_id not in self.user_sessions:
-            self.user_sessions[user_id] = {"mode": "normal"}
+        # آپدیت پروفایل کاربر
+        if user_id not in self.user_profiles:
+            self.user_profiles[user_id] = {
+                "name": update.effective_user.first_name,
+                "join_date": datetime.now(),
+                "message_count": 0,
+                "emotion_history": []
+            }
         
-        if text in self.learning_data["qa"]:
-            await update.message.reply_text(self.learning_data["qa"][text])
-            return
+        self.user_profiles[user_id]["message_count"] += 1
         
-        if text == "💬 چت هوشمند":
-            await update.message.reply_text("💬 **حالت چت فعال شد!**\n\nهر پیامی بفرستید تا پاسخ هوشمند دریافت کنید.")
+        # تحلیل احساسات
+        emotion, score = self.analyze_emotion(text)
+        self.user_profiles[user_id]["emotion_history"].append({
+            "text": text,
+            "emotion": emotion,
+            "score": score,
+            "timestamp": datetime.now()
+        })
         
-        elif text == "🧮 ماشین حساب":
-            await update.message.reply_text("🧮 **ماشین حساب:**\n\nعبارت ریاضی مانند زیر بفرستید:\n2+3*5")
+        if text == "🧠 چت هوشمند":
+            await update.message.reply_text("🧠 **حالت چت پیشرفته فعال شد!**\n\nهر پیامی بفرستید تا پاسخ هوشمند دریافت کنید!")
         
-        elif text == "🌤️ آب و هوا":
-            cities = ["تهران", "مشهد", "اصفهان", "شیراز", "تبریز"]
-            keyboard = [[InlineKeyboardButton(city, callback_data=f"weather_{city}")] for city in cities]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text("🌤️ **انتخاب شهر:**", reply_markup=reply_markup)
+        elif text == "📊 تحلیل احساسات":
+            emotion_stats = self.get_emotion_stats(user_id)
+            await update.message.reply_text(f"📊 **تحلیل احساسات شما:**\n\n{emotion_stats}")
         
-        elif text == "📚 دانشنامه":
-            categories = ["ریاضی", "برنامه نویسی", "علم", "تاریخ"]
-            keyboard = [[InlineKeyboardButton(cat, callback_data=f"knowledge_{cat}")] for cat in categories]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text("📚 **انتخاب دسته:**", reply_markup=reply_markup)
+        elif text == "🎯 پیش‌بینی":
+            prediction = self.generate_prediction()
+            await update.message.reply_text(f"🎯 **پیش‌بینی هوشمند:**\n\n{prediction}")
         
-        elif text == "😂 جوک":
-            joke = self.get_persian_joke()
-            await update.message.reply_text(f"😂 **جوک:**\n\n{joke}")
+        elif text == "🔍 جستجوی پیشرفته":
+            await update.message.reply_text("🔍 **جستجوی پیشرفته:**\n\nموضوع مورد نظر را تایپ کنید...")
         
-        elif text == "💡 مشاوره":
-            advice = self.get_persian_advice()
-            await update.message.reply_text(f"💡 **مشاوره:**\n\n{advice}")
+        elif text == "📈 آمار کاربری":
+            stats = self.get_user_stats(user_id)
+            await update.message.reply_text(f"📈 **آمار کاربری شما:**\n\n{stats}")
         
-        elif text == "🎯 یادگیری":
-            await self.learn_command(update, context)
+        elif text == "🎮 تست هوش":
+            await self.iq_test(update, context)
         
-        elif text == "⚙️ تنظیمات" and self.is_owner(user_id):
-            await update.message.reply_text("👑 **تنظیمات مالک:**\n\nاین بخش برای مدیریت ربات است.")
+        elif text == "⚡ محاسبات پیچیده":
+            await update.message.reply_text("⚡ **محاسبات پیچیده:**\n\nعبارت ریاضی پیچیده وارد کنید...")
         
-        elif text == "👑 مدیریت کاربران" and self.is_owner(user_id):
-            user_count = len(self.user_sessions)
-            await update.message.reply_text(f"📊 **آمار کاربران:**\n\nتعداد کاربران فعال: {user_count}")
-        
-        elif text == "📊 آمار ربات" and self.is_owner(user_id):
-            learned_count = len(self.learning_data["qa"])
-            user_count = len(self.user_sessions)
-            await update.message.reply_text(f"📈 **آمار ربات:**\n\n👥 کاربران: {user_count}\n🎯 موارد آموخته: {learned_count}")
+        elif text == "👑 ویژه مالک" and self.is_owner(user_id):
+            await self.owner_dashboard(update, context)
         
         else:
-            response = self.generate_smart_response(text)
+            # پاسخ هوشمند پیشرفته
+            response = self.get_contextual_response(text, user_id)
             await update.message.reply_text(response)
 
-    def generate_smart_response(self, message):
-        message_lower = message.lower()
+    def get_emotion_stats(self, user_id):
+        """آمار احساسات کاربر"""
+        if user_id not in self.user_profiles:
+            return "اطلاعاتی موجود نیست"
         
-        responses = {
-            "سلام": "سلام! چطور می‌تونم کمک کنم؟ 😊",
-            "حالت چطوره": "من یک ربات هستم، همیشه عالیم! شما چطورید؟",
-            "اسمت چیه": "من یک دستیار هوش مصنوعی فارسی هستم! 🤖",
-            "خداحافظ": "خداحافظ! موفق باشید 👋",
-            "متشکرم": "خواهش می‌کنم! خوشحالم که مفید بودم 💫"
-        }
+        emotions = [entry["score"] for entry in self.user_profiles[user_id]["emotion_history"][-10:]]
+        positive = emotions.count("مثبت")
+        negative = emotions.count("منفی")
+        neutral = emotions.count("خنثی")
         
-        if message in responses:
-            return responses[message]
-        
-        if any(op in message for op in ['+', '-', '*', '/', '×', '÷']):
-            try:
-                expr = message.replace('×', '*').replace('÷', '/').replace(' ', '')
-                result = eval(expr)
-                return f"🧮 نتیجه: {message} = {result}"
-            except:
-                return "❌ عبارت ریاضی نامعتبر است"
-        
-        return f"\"{message}\" - سوال جالبیه! 😊\n\nاز منوی پایین استفاده کنید."
+        return (
+            f"😊 مثبت: {positive}\n"
+            f"😔 منفی: {negative}\n"
+            f"😐 خنثی: {neutral}\n\n"
+            f"📊 آخرین تحلیل: {self.user_profiles[user_id]['emotion_history'][-1]['emotion']}"
+        )
 
-    def get_persian_joke(self):
-        jokes = [
-            "چرا کامپیوتر نمی‌تونه قایم باشک بازی کنه؟ چون همیشه مونیتورش رو روشن می‌ذاره! 😄",
-            "چرا برنامه‌نویس ها همیشه حالت عادی نمی‌تونن بخوابن؟ چون همیشه در حالت دیباگ هستن! 🐛"
+    def generate_prediction(self):
+        """پیش‌بینی هوشمند"""
+        predictions = [
+            "فردا روز خوبی برای یادگیری چیزهای جدید خواهد بود! 📚",
+            "به زودی فرصت‌های جدیدی در زندگی شما ظاهر می‌شود! 💫",
+            "هفته آینده زمان مناسبی برای شروع پروژه‌های جدید است! 🚀",
+            "به زودی با افراد جدید و جالبی آشنا خواهید شد! 👥",
+            "انرژی مثبت زیادی در راه است! آماده موفقیت باشید! 🌟"
         ]
-        return random.choice(jokes)
+        return random.choice(predictions)
 
-    def get_persian_advice(self):
-        advice_list = [
-            "💡 همیشه قبل از انجام کار برنامه‌ریزی کن!",
-            "🚀 یادگیری رو هیچوقت متوقف نکن"
+    def get_user_stats(self, user_id):
+        """آمار کاربری پیشرفته"""
+        if user_id not in self.user_profiles:
+            return "کاربر جدید"
+        
+        profile = self.user_profiles[user_id]
+        days_joined = (datetime.now() - profile["join_date"]).days
+        
+        return (
+            f"👤 نام: {profile['name']}\n"
+            f"📅 عضو شده: {days_joined} روز پیش\n"
+            f"💬 تعداد پیام: {profile['message_count']}\n"
+            f"📈 میانگین روزانه: {profile['message_count'] / max(days_joined, 1):.1f} پیام\n"
+            f"🎯 فعالیت: {'عالی' if profile['message_count'] > 50 else 'خوب' if profile['message_count'] > 20 else 'معمولی'}"
+        )
+
+    async def iq_test(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """تست هوش"""
+        questions = [
+            {
+                "question": "اگر ۲ ماشین ۲ ساعت وقت نیاز داشته باشند تا ۲ دستگاه رو بسازن، ۴ ماشین چقدر وقت نیاز دارن تا ۴ دستگاه بسازن؟",
+                "options": ["۲ ساعت", "۴ ساعت", "۱ ساعت", "۸ ساعت"],
+                "answer": 0
+            },
+            {
+                "question": "کدوم گزینه با بقیه فرق داره؟",
+                "options": ["مثلث", "مربع", "دایره", "مکعب"],
+                "answer": 3
+            }
         ]
-        return random.choice(advice_list)
+        
+        q = random.choice(questions)
+        keyboard = [[InlineKeyboardButton(opt, callback_data=f"iq_{i}")] for i, opt in enumerate(q["options"])]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        context.user_data["current_iq"] = q
+        await update.message.reply_text(f"🧠 **تست هوش:**\n\n{q['question']}", reply_markup=reply_markup)
+
+    async def owner_dashboard(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """داشبورد مالک"""
+        total_users = len(self.user_profiles)
+        total_messages = sum(user["message_count"] for user in self.user_profiles.values())
+        
+        keyboard = [
+            [InlineKeyboardButton("📊 آمار کامل", callback_data="stats_full")],
+            [InlineKeyboardButton("👥 مدیریت کاربران", callback_data="users_manage")],
+            [InlineKeyboardButton("🧠 آنالیز داده", callback_data="data_analyze")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"👑 **داشبورد مالک:**\n\n"
+            f"👥 کاربران کل: {total_users}\n"
+            f"💬 پیام‌های کل: {total_messages}\n"
+            f"📅 تاریخ: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            reply_markup=reply_markup
+        )
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -195,47 +270,32 @@ class PersianAIBot:
         
         data = query.data
         
-        if data.startswith("weather_"):
-            city = data.split("_")[1]
-            weather_info = self.get_weather_for_city(city)
-            await query.edit_message_text(weather_info)
+        if data.startswith("iq_"):
+            answer_index = int(data.split("_")[1])
+            current_iq = context.user_data.get("current_iq")
+            
+            if current_iq and answer_index == current_iq["answer"]:
+                await query.edit_message_text("✅ **درست جواب دادید! شما باهوش هستید!** 🧠")
+            else:
+                await query.edit_message_text("❌ **پاسخ صحیح نبود! بازم تلاش کنید!** 💪")
         
-        elif data.startswith("knowledge_"):
-            category = data.split("_")[1]
-            knowledge_info = self.get_knowledge_for_category(category)
-            await query.edit_message_text(knowledge_info)
-
-    def get_weather_for_city(self, city):
-        weather_data = {
-            "تهران": "🌤️ **آب و هوای تهران:**\n🌡 دما: 25°C\n📊 وضعیت: آفتابی\n💧 رطوبت: 40%",
-            "مشهد": "🌤️ **آب و هوای مشهد:**\n🌡 دما: 22°C\n📊 وضعیت: نیمه ابری\n💧 رطوبت: 35%",
-            "اصفهان": "🌤️ **آب و هوای اصفهان:**\n🌡 دما: 27°C\n📊 وضعیت: آفتابی\n💧 رطوبت: 30%",
-            "شیراز": "🌤️ **آب و هوای شیراز:**\n🌡 دما: 29°C\n📊 وضعیت: گرم\n💧 رطوبت: 25%",
-            "تبریز": "🌤️ **آب و هوای تبریز:**\n🌡 دما: 18°C\n📊 وضعیت: ابری\n💧 رطوبت: 45%"
-        }
-        return weather_data.get(city, "❌ اطلاعات این شهر موجود نیست")
-
-    def get_knowledge_for_category(self, category):
-        knowledge_data = {
-            "ریاضی": "📐 **ریاضیات:**\n\n• مساحت دایره = π × شعاع²\n• محیط دایره = 2 × π × شعاع",
-            "برنامه نویسی": "💻 **برنامه‌نویسی:**\n\n• پایتون: زبان سطح بالا\n• جاوا: زبان شیءگرا",
-            "علم": "🔬 **علم:**\n\n• جاذبه: توسط نیوتن کشف شد\n• نسبیت: نظریه انیشتین",
-            "تاریخ": "📜 **تاریخ:**\n\n• ایران: کشوری با تمدن کهن"
-        }
-        return knowledge_data.get(category, "❌ اطلاعات این دسته موجود نیست")
+        elif data == "stats_full":
+            total_users = len(self.user_profiles)
+            await query.edit_message_text(f"📊 **آمار کامل:**\n\nکاربران فعال: {total_users}")
+        
+        elif data == "users_manage":
+            await query.edit_message_text("👥 **مدیریت کاربران:**\n\nاین بخش برای مدیریت پیشرفته کاربران است")
 
 def main():
-    bot = PersianAIBot()
+    ai_bot = AdvancedAI()
     
     application = Application.builder().token(BOT_TOKEN).build()
     
-    application.add_handler(CommandHandler("start", bot.start))
-    application.add_handler(CommandHandler("help", bot.help_command))
-    application.add_handler(CommandHandler("learn", bot.learn_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_message))
-    application.add_handler(CallbackQueryHandler(bot.handle_callback))
+    application.add_handler(CommandHandler("start", ai_bot.start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_bot.handle_message))
+    application.add_handler(CallbackQueryHandler(ai_bot.handle_callback))
     
-    print("🤖 Bot is running on Render...")
+    print("🧠 هوش مصنوعی پیشرفته در حال اجراست...")
     application.run_polling()
 
 if __name__ == "__main__":
